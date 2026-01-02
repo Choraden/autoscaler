@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -169,7 +170,7 @@ func TestNodeInfo(t *testing.T) {
 			modFn: func(info fwk.NodeInfo) *NodeInfo {
 				result := NewNodeInfo(info.Node(), slices, testPodInfos(pods, true)...)
 				for _, pod := range []*apiv1.Pod{pods[0], pods[2], pods[4]} {
-					if err := result.RemovePod(pod); err != nil {
+					if err := result.RemovePod(klog.Background(), pod); err != nil {
 						t.Errorf("RemovePod unexpected error: %v", err)
 					}
 				}
