@@ -54,7 +54,7 @@ func BenchmarkBuildNodeInfoList(b *testing.B) {
 			deltaStore.Fork()
 			for _, node := range nodes[tc.nodeCount:] {
 				nodeInfo := framework.NewNodeInfo(node, nil)
-				if err := deltaStore.ForceAddNodeInfo(nodeInfo); err != nil {
+				if err := deltaStore.StoreNodeInfo(nodeInfo); err != nil {
 					assert.NoError(b, err)
 				}
 			}

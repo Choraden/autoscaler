@@ -168,21 +168,12 @@ func (data *internalBasicSnapshotData) removeNodeInfo(nodeName string) error {
 	return nil
 }
 
-func (data *internalBasicSnapshotData) addPod(pod *apiv1.Pod, nodeName string, draSnapshot *drasnapshot.Snapshot) error {
+func (data *internalBasicSnapshotData) addPod(podInfo *framework.PodInfo, nodeName string) error {
 	if _, found := data.nodeInfoMap[nodeName]; !found {
 		return clustersnapshot.ErrNodeNotFound
 	}
-	var claims []*resourceapi.ResourceClaim
-	if draSnapshot != nil {
-		var err error
-		claims, err = draSnapshot.PodClaims(pod)
-		if err != nil {
-			return err
-		}
-	}
-	podInfo := framework.NewPodInfo(pod, claims)
-	data.nodeInfoMap[nodeName].AddPod(podInfo)
-	data.addPvcUsedByPod(pod)
+	data.nodeInfoMap[nodeName].AddPod(podInfo.DeepCopy())
+	data.addPvcUsedByPod(podInfo.Pod)
 	return nil
 }
 
@@ -197,9 +188,6 @@ func (data *internalBasicSnapshotData) removePod(namespace, podName, nodeName st
 			data.removePvcUsedByPod(podInfo.GetPod())
 			err := nodeInfo.RemovePod(logger, podInfo.GetPod())
 			if err != nil {
-				// We don't really have claims here to revert properly if RemovePod failed partially?
-				// But RemovePod on *framework.NodeInfo is unlikely to fail in a way that needs complex revert of *this* function logic,
-				// except re-adding pvc usage.
 				data.addPvcUsedByPod(podInfo.GetPod())
 				return fmt.Errorf("cannot remove pod; %v", err)
 			}
@@ -225,8 +213,8 @@ func (snapshot *BasicSnapshotStore) DraSnapshot() *drasnapshot.Snapshot {
 	return snapshot.draSnapshot
 }
 
-// ForceAddNodeInfo adds a NodeInfo.
-func (snapshot *BasicSnapshotStore) ForceAddNodeInfo(nodeInfo *framework.NodeInfo) error {
+// StoreNodeInfo adds a NodeInfo.
+func (snapshot *BasicSnapshotStore) StoreNodeInfo(nodeInfo *framework.NodeInfo) error {
 	data := snapshot.getInternalData()
 	if _, found := data.nodeInfoMap[nodeInfo.Node().Name]; found {
 		return fmt.Errorf("node %s already in snapshot", nodeInfo.Node().Name)
@@ -261,7 +249,12 @@ func (snapshot *BasicSnapshotStore) SetClusterState(nodes []*apiv1.Node, schedul
 	}
 	for _, pod := range scheduledPods {
 		if knownNodes[pod.Spec.NodeName] {
-			if err := snapshot.getInternalData().addPod(pod, pod.Spec.NodeName, snapshot.draSnapshot); err != nil {
+			var claims []*resourceapi.ResourceClaim
+			if snapshot.draSnapshot != nil {
+				claims, _ = snapshot.draSnapshot.PodClaims(pod)
+			}
+			podInfo := framework.NewPodInfo(pod, claims)
+			if err := snapshot.getInternalData().addPod(podInfo, pod.Spec.NodeName); err != nil {
 				return err
 			}
 		}
@@ -275,9 +268,9 @@ func (snapshot *BasicSnapshotStore) ForceRemoveNodeInfo(nodeName string) error {
 	return snapshot.getInternalData().removeNodeInfo(nodeName)
 }
 
-// ForceAddPod adds pod to the snapshot and schedules it to given node.
-func (snapshot *BasicSnapshotStore) ForceAddPod(pod *apiv1.Pod, nodeName string) error {
-	return snapshot.getInternalData().addPod(pod, nodeName, snapshot.draSnapshot)
+// StorePodInfo adds pod to the snapshot and schedules it to given node.
+func (snapshot *BasicSnapshotStore) StorePodInfo(podInfo *framework.PodInfo, nodeName string) error {
+	return snapshot.getInternalData().addPod(podInfo, nodeName)
 }
 
 // ForceRemovePod removes pod from the snapshot.

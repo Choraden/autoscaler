@@ -104,11 +104,9 @@ func BenchmarkAddPods(b *testing.B) {
 					}
 					b.StartTimer()
 					for _, pod := range pods {
-						err = clusterSnapshot.ForceAddPod(pod, pod.Spec.NodeName)
-						if err != nil {
-							assert.NoError(b, err)
-						}
-					}
+							if err := clusterSnapshot.StorePodInfo(framework.NewPodInfo(pod, nil), "node"); err != nil {
+								b.Fatalf("Error adding pod: %v", err)
+							}					}
 				}
 			})
 		}

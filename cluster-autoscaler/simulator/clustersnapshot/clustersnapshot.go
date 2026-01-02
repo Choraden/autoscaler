@@ -78,14 +78,15 @@ type ClusterSnapshotStore interface {
 	// with the provided data. scheduledPods are correlated to their Nodes based on spec.NodeName.
 	SetClusterState(nodes []*apiv1.Node, scheduledPods []*apiv1.Pod, draSnapshot *drasnapshot.Snapshot) error
 
-	// ForceAddPod adds the given Pod to the Node with the given nodeName inside the snapshot without checking scheduler predicates.
-	ForceAddPod(pod *apiv1.Pod, nodeName string) error
+	// StorePodInfo adds the given CA-internal PodInfo to the Node with the given nodeName inside the snapshot
+	// without checking scheduler predicates.
+	StorePodInfo(podInfo *framework.PodInfo, nodeName string) error
 	// ForceRemovePod removes the given Pod (and all DRA objects it owns) from the snapshot.
 	ForceRemovePod(namespace string, podName string, nodeName string) error
 
-	// ForceAddNodeInfo adds the given CA-internal NodeInfo to the snapshot without checking scheduler predicates.
+	// StoreNodeInfo adds the given CA-internal NodeInfo to the snapshot without checking scheduler predicates.
 	// This shouldn't be used outside the clustersnapshot pkg, use ClusterSnapshot.AddNodeInfo() instead.
-	ForceAddNodeInfo(nodeInfo *framework.NodeInfo) error
+	StoreNodeInfo(nodeInfo *framework.NodeInfo) error
 	// ForceRemoveNodeInfo removes the given NodeInfo from the snapshot without taking DRA objects into account. This shouldn't
 	// be used outside the clustersnapshot pkg, use ClusterSnapshot.RemoveNodeInfo() instead.
 	ForceRemoveNodeInfo(nodeName string) error

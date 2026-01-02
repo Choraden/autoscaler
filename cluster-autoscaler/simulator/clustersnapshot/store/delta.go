@@ -259,21 +259,12 @@ func (data *internalDeltaSnapshotData) nodeInfoToModify(nodeName string) (*frame
 	return dni, true
 }
 
-func (data *internalDeltaSnapshotData) addPod(pod *apiv1.Pod, nodeName string, draSnapshot *drasnapshot.Snapshot) error {
+func (data *internalDeltaSnapshotData) addPod(podInfo *framework.PodInfo, nodeName string) error {
 	ni, found := data.nodeInfoToModify(nodeName)
 	if !found {
 		return clustersnapshot.ErrNodeNotFound
 	}
 
-	var claims []*resourceapi.ResourceClaim
-	if draSnapshot != nil {
-		var err error
-		claims, err = draSnapshot.PodClaims(pod)
-		if err != nil {
-			return err
-		}
-	}
-	podInfo := framework.NewPodInfo(pod, claims)
 	ni.AddPod(podInfo)
 
 	// Maybe consider deleting from the list in the future. Maybe not.
@@ -465,8 +456,8 @@ func (snapshot *DeltaSnapshotStore) DraSnapshot() *drasnapshot.Snapshot {
 	return snapshot.draSnapshot
 }
 
-// ForceAddNodeInfo adds a NodeInfo.
-func (snapshot *DeltaSnapshotStore) ForceAddNodeInfo(nodeInfo *framework.NodeInfo) error {
+// StoreNodeInfo adds a NodeInfo.
+func (snapshot *DeltaSnapshotStore) StoreNodeInfo(nodeInfo *framework.NodeInfo) error {
 	return snapshot.data.addNodeInfo(nodeInfo)
 }
 
@@ -563,9 +554,9 @@ func (snapshot *DeltaSnapshotStore) ForceRemoveNodeInfo(nodeName string) error {
 	return snapshot.data.removeNodeInfo(nodeName)
 }
 
-// ForceAddPod adds pod to the snapshot and schedules it to given node.
-func (snapshot *DeltaSnapshotStore) ForceAddPod(pod *apiv1.Pod, nodeName string) error {
-	return snapshot.data.addPod(pod, nodeName, snapshot.draSnapshot)
+// StorePodInfo adds pod to the snapshot and schedules it to given node.
+func (snapshot *DeltaSnapshotStore) StorePodInfo(podInfo *framework.PodInfo, nodeName string) error {
+	return snapshot.data.addPod(podInfo, nodeName)
 }
 
 // ForceRemovePod removes pod from the snapshot.

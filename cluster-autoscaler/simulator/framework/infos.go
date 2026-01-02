@@ -149,6 +149,15 @@ func (n *NodeInfo) ResourceClaims() []*resourceapi.ResourceClaim {
 	return result
 }
 
+// DeepCopy clones the PodInfo.
+func (p *PodInfo) DeepCopy() *PodInfo {
+	newClaims := make([]*resourceapi.ResourceClaim, len(p.NeededResourceClaims))
+	for i, claim := range p.NeededResourceClaims {
+		newClaims[i] = claim.DeepCopy()
+	}
+	return NewPodInfo(p.Pod.DeepCopy(), newClaims)
+}
+
 // NewNodeInfo returns a new internal NodeInfo from the provided data.
 func NewNodeInfo(node *apiv1.Node, slices []*resourceapi.ResourceSlice, pods ...*PodInfo) *NodeInfo {
 	result := &NodeInfo{
