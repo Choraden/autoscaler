@@ -57,6 +57,10 @@ func (s *PredicateSnapshot) GetNodeInfo(nodeName string) (*framework.NodeInfo, e
 		return nil, err
 	}
 
+	if nodeInfo, ok := schedNodeInfo.(*framework.NodeInfo); ok {
+		return nodeInfo, nil
+	}
+
 	if s.draEnabled {
 		return s.ClusterSnapshotStore.DraSnapshot().WrapSchedulerNodeInfo(schedNodeInfo)
 	}
@@ -71,7 +75,9 @@ func (s *PredicateSnapshot) ListNodeInfos() ([]*framework.NodeInfo, error) {
 	}
 	var result []*framework.NodeInfo
 	for _, schedNodeInfo := range schedNodeInfos {
-		if s.draEnabled {
+		if nodeInfo, ok := schedNodeInfo.(*framework.NodeInfo); ok {
+			result = append(result, nodeInfo)
+		} else if s.draEnabled {
 			nodeInfo, err := s.ClusterSnapshotStore.DraSnapshot().WrapSchedulerNodeInfo(schedNodeInfo)
 			if err != nil {
 				return nil, err
