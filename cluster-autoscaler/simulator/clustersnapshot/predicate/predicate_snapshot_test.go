@@ -362,7 +362,7 @@ func validTestCases(t *testing.T, snapshotName string) []modificationTestCase {
 				nodes: []*apiv1.Node{node},
 			},
 			op: func(snapshot clustersnapshot.ClusterSnapshot) error {
-				if schedErr := snapshot.ForceAddPod(pod, node.Name); schedErr != nil {
+				if schedErr := snapshot.StorePodInfo(framework.NewPodInfo(pod, nil), node.Name); schedErr != nil {
 					return schedErr
 				}
 				return snapshot.RemoveNodeInfo(node.Name)
@@ -1360,7 +1360,7 @@ func TestSetClusterState(t *testing.T) {
 				}
 
 				for _, pod := range extraPods {
-					err := snapshot.ForceAddPod(pod, pod.Spec.NodeName)
+					err := snapshot.StorePodInfo(framework.NewPodInfo(pod, nil), pod.Spec.NodeName)
 					assert.NoError(t, err)
 				}
 
@@ -1382,13 +1382,13 @@ func TestNode404(t *testing.T) {
 		name string
 		op   func(clustersnapshot.ClusterSnapshot) error
 	}{
-		{"force add pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
-			return snapshot.ForceAddPod(BuildTestPod("p1", 0, 0), "node")
+		{"add pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
+			pod := BuildTestPod("p1", 0, 0)
+			return snapshot.StorePodInfo(framework.NewPodInfo(pod, nil), "node")
 		}},
-		{"force remove pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
+		{"remove pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
 			return snapshot.ForceRemovePod("default", "p1", "node")
-		}},
-		{"schedule pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
+		}},		{"schedule pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
 			return snapshot.SchedulePod(BuildTestPod("p1", 0, 0), "node")
 		}},
 		{"unschedule pod", func(snapshot clustersnapshot.ClusterSnapshot) error {
@@ -1477,7 +1477,7 @@ func TestNodeAlreadyExists(t *testing.T) {
 	}{
 		{"force add nodeInfo", func(snapshot clustersnapshot.ClusterSnapshot) error {
 			nodeInfo := framework.NewNodeInfo(node, nil)
-			return snapshot.ForceAddNodeInfo(nodeInfo)
+			return snapshot.StoreNodeInfo(nodeInfo)
 		}},
 		{"add internal NodeInfo", func(snapshot clustersnapshot.ClusterSnapshot) error {
 			return snapshot.AddNodeInfo(framework.NewTestNodeInfo(node, pod))
@@ -1755,7 +1755,7 @@ func TestPVCClearAndFork(t *testing.T) {
 			volumeExists = snapshot.StorageInfos().IsPVCUsedByPods(schedulerframework.GetNamespacedName("default", "claim1"))
 			assert.Equal(t, true, volumeExists)
 
-			err = snapshot.ForceAddPod(pod2, "node")
+			err = snapshot.StorePodInfo(framework.NewPodInfo(pod2, nil), "node")
 			assert.NoError(t, err)
 
 			volumeExists = snapshot.StorageInfos().IsPVCUsedByPods(schedulerframework.GetNamespacedName("default", "claim2"))

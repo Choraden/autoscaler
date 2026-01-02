@@ -112,7 +112,7 @@ func (s *PredicateSnapshot) AddNodeInfo(nodeInfo *framework.NodeInfo) error {
 		}
 	}
 
-	return s.ClusterSnapshotStore.ForceAddNodeInfo(nodeInfo)
+	return s.ClusterSnapshotStore.StoreNodeInfo(nodeInfo)
 }
 
 // RemoveNodeInfo removes a NodeInfo matching the provided nodeName from the snapshot.
@@ -143,6 +143,7 @@ func (s *PredicateSnapshot) SchedulePod(pod *apiv1.Pod, nodeName string) cluster
 		return schedErr
 	}
 
+	var claims []*resourceapi.ResourceClaim
 	if s.draEnabled && len(pod.Spec.ResourceClaims) > 0 {
 		// TODO(DRA): Add transaction-like clean-up in case of errors here - don't modify the state on any errors.
 		if err := s.modifyResourceClaimsForScheduledPod(pod, node, cycleState); err != nil {
@@ -151,9 +152,15 @@ func (s *PredicateSnapshot) SchedulePod(pod *apiv1.Pod, nodeName string) cluster
 		if err := s.verifyScheduledPodResourceClaims(pod, node); err != nil {
 			return clustersnapshot.NewSchedulingInternalError(pod, err.Error())
 		}
+		var err error
+		claims, err = s.ClusterSnapshotStore.DraSnapshot().PodClaims(pod)
+		if err != nil {
+			return clustersnapshot.NewSchedulingInternalError(pod, err.Error())
+		}
 	}
 
-	if err := s.ClusterSnapshotStore.ForceAddPod(pod, nodeName); err != nil {
+	podInfo := framework.NewPodInfo(pod, claims)
+	if err := s.ClusterSnapshotStore.StorePodInfo(podInfo, nodeName); err != nil {
 		return clustersnapshot.NewSchedulingInternalError(pod, err.Error())
 	}
 	return nil
@@ -166,6 +173,7 @@ func (s *PredicateSnapshot) SchedulePodOnAnyNodeMatching(pod *apiv1.Pod, anyNode
 		return "", schedErr
 	}
 
+	var claims []*resourceapi.ResourceClaim
 	if s.draEnabled && len(pod.Spec.ResourceClaims) > 0 {
 		// TODO(DRA): Add transaction-like clean-up in case of errors here - don't modify the state on any errors.
 		if err := s.modifyResourceClaimsForScheduledPod(pod, node, cycleState); err != nil {
@@ -174,9 +182,15 @@ func (s *PredicateSnapshot) SchedulePodOnAnyNodeMatching(pod *apiv1.Pod, anyNode
 		if err := s.verifyScheduledPodResourceClaims(pod, node); err != nil {
 			return "", clustersnapshot.NewSchedulingInternalError(pod, err.Error())
 		}
+		var err error
+		claims, err = s.ClusterSnapshotStore.DraSnapshot().PodClaims(pod)
+		if err != nil {
+			return "", clustersnapshot.NewSchedulingInternalError(pod, err.Error())
+		}
 	}
 
-	if err := s.ClusterSnapshotStore.ForceAddPod(pod, node.Name); err != nil {
+	podInfo := framework.NewPodInfo(pod, claims)
+	if err := s.ClusterSnapshotStore.StorePodInfo(podInfo, node.Name); err != nil {
 		return "", clustersnapshot.NewSchedulingInternalError(pod, err.Error())
 	}
 	return node.Name, nil
