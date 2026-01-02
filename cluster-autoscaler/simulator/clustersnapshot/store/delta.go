@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	apiv1 "k8s.io/api/core/v1"
+	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/clustersnapshot"
 	drasnapshot "k8s.io/autoscaler/cluster-autoscaler/simulator/dynamicresources/snapshot"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/framework"
@@ -28,7 +29,6 @@ import (
 
 	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
-	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
 // DeltaSnapshotStore is an implementation of ClusterSnapshotStore optimized for typical Cluster Autoscaler usage - (fork, add stuff, revert), repeated many times per loop.
@@ -149,8 +149,8 @@ func (data *internalDeltaSnapshotData) buildNodeInfoList() []fwk.NodeInfo {
 	return nodeInfoList
 }
 
-func (data *internalDeltaSnapshotData) addNode(node *apiv1.Node) (fwk.NodeInfo, error) {
-	nodeInfo := framework.NewNodeInfo(node, nil)
+func (data *internalDeltaSnapshotData) addNode(node *apiv1.Node, slices []*resourceapi.ResourceSlice) (fwk.NodeInfo, error) {
+	nodeInfo := framework.NewNodeInfo(node, slices)
 	err := data.addNodeInfo(nodeInfo)
 	if err != nil {
 		return nil, err
@@ -259,14 +259,22 @@ func (data *internalDeltaSnapshotData) nodeInfoToModify(nodeName string) (*frame
 	return dni, true
 }
 
-func (data *internalDeltaSnapshotData) addPod(pod *apiv1.Pod, nodeName string) error {
+func (data *internalDeltaSnapshotData) addPod(pod *apiv1.Pod, nodeName string, draSnapshot *drasnapshot.Snapshot) error {
 	ni, found := data.nodeInfoToModify(nodeName)
 	if !found {
 		return clustersnapshot.ErrNodeNotFound
 	}
 
-	podInfo, _ := schedulerframework.NewPodInfo(pod)
-	ni.AddPodInfo(podInfo)
+	var claims []*resourceapi.ResourceClaim
+	if draSnapshot != nil {
+		var err error
+		claims, err = draSnapshot.PodClaims(pod)
+		if err != nil {
+			return err
+		}
+	}
+	podInfo := framework.NewPodInfo(pod, claims)
+	ni.AddPod(podInfo)
 
 	// Maybe consider deleting from the list in the future. Maybe not.
 	data.clearCaches()
@@ -467,8 +475,16 @@ func (snapshot *DeltaSnapshotStore) setClusterStatePodsSequential(nodeInfos []fw
 	for _, pod := range scheduledPods {
 		if nodeIdx, ok := nodeNameToIdx[pod.Spec.NodeName]; ok {
 			// Can add pod directly. Cache will be cleared afterwards.
-			podInfo, _ := schedulerframework.NewPodInfo(pod)
-			nodeInfos[nodeIdx].AddPodInfo(podInfo)
+			var claims []*resourceapi.ResourceClaim
+			if snapshot.draSnapshot != nil {
+				claims, _ = snapshot.draSnapshot.PodClaims(pod)
+			}
+			podInfo := framework.NewPodInfo(pod, claims)
+			if ni, ok := nodeInfos[nodeIdx].(*framework.NodeInfo); ok {
+				ni.AddPod(podInfo)
+			} else {
+				nodeInfos[nodeIdx].AddPodInfo(podInfo.PodInfo)
+			}
 		}
 	}
 }
@@ -489,8 +505,16 @@ func (snapshot *DeltaSnapshotStore) setClusterStatePodsParallelized(nodeInfos []
 		nodeInfo := nodeInfos[nodeIdx]
 		for _, pod := range podsForNode[nodeIdx] {
 			// Can add pod directly. Cache will be cleared afterwards.
-			podInfo, _ := schedulerframework.NewPodInfo(pod)
-			nodeInfo.AddPodInfo(podInfo)
+			var claims []*resourceapi.ResourceClaim
+			if snapshot.draSnapshot != nil {
+				claims, _ = snapshot.draSnapshot.PodClaims(pod)
+			}
+			podInfo := framework.NewPodInfo(pod, claims)
+			if ni, ok := nodeInfo.(*framework.NodeInfo); ok {
+				ni.AddPod(podInfo)
+			} else {
+				nodeInfo.AddPodInfo(podInfo.PodInfo)
+			}
 		}
 	})
 }
@@ -499,10 +523,20 @@ func (snapshot *DeltaSnapshotStore) setClusterStatePodsParallelized(nodeInfos []
 func (snapshot *DeltaSnapshotStore) SetClusterState(nodes []*apiv1.Node, scheduledPods []*apiv1.Pod, draSnapshot *drasnapshot.Snapshot) error {
 	snapshot.clear()
 
+	if draSnapshot == nil {
+		snapshot.draSnapshot = drasnapshot.NewEmptySnapshot()
+	} else {
+		snapshot.draSnapshot = draSnapshot
+	}
+
 	nodeNameToIdx := make(map[string]int, len(nodes))
 	nodeInfos := make([]fwk.NodeInfo, len(nodes))
 	for i, node := range nodes {
-		nodeInfo, err := snapshot.data.addNode(node)
+		var slices []*resourceapi.ResourceSlice
+		if snapshot.draSnapshot != nil {
+			slices, _ = snapshot.draSnapshot.NodeResourceSlices(node.Name)
+		}
+		nodeInfo, err := snapshot.data.addNode(node, slices)
 		if err != nil {
 			return err
 		}
@@ -521,12 +555,6 @@ func (snapshot *DeltaSnapshotStore) SetClusterState(nodes []*apiv1.Node, schedul
 	// Clear caches after adding pods.
 	snapshot.data.clearCaches()
 
-	if draSnapshot == nil {
-		snapshot.draSnapshot = drasnapshot.NewEmptySnapshot()
-	} else {
-		snapshot.draSnapshot = draSnapshot
-	}
-
 	return nil
 }
 
@@ -537,7 +565,7 @@ func (snapshot *DeltaSnapshotStore) ForceRemoveNodeInfo(nodeName string) error {
 
 // ForceAddPod adds pod to the snapshot and schedules it to given node.
 func (snapshot *DeltaSnapshotStore) ForceAddPod(pod *apiv1.Pod, nodeName string) error {
-	return snapshot.data.addPod(pod, nodeName)
+	return snapshot.data.addPod(pod, nodeName, snapshot.draSnapshot)
 }
 
 // ForceRemovePod removes pod from the snapshot.
