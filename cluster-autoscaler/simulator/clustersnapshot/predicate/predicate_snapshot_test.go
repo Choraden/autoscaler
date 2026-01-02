@@ -1475,10 +1475,9 @@ func TestNodeAlreadyExists(t *testing.T) {
 		name string
 		op   func(clustersnapshot.ClusterSnapshot) error
 	}{
-		{"add scheduler nodeInfo", func(snapshot clustersnapshot.ClusterSnapshot) error {
-			nodeInfo := schedulerframework.NewNodeInfo()
-			nodeInfo.SetNode(node)
-			return snapshot.AddSchedulerNodeInfo(nodeInfo)
+		{"force add nodeInfo", func(snapshot clustersnapshot.ClusterSnapshot) error {
+			nodeInfo := framework.NewNodeInfo(node, nil)
+			return snapshot.ForceAddNodeInfo(nodeInfo)
 		}},
 		{"add internal NodeInfo", func(snapshot clustersnapshot.ClusterSnapshot) error {
 			return snapshot.AddNodeInfo(framework.NewTestNodeInfo(node, pod))
