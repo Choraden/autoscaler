@@ -23,7 +23,6 @@ import (
 	drasnapshot "k8s.io/autoscaler/cluster-autoscaler/simulator/dynamicresources/snapshot"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/framework"
 	"k8s.io/klog/v2"
-	fwk "k8s.io/kube-scheduler/framework"
 )
 
 // ClusterSnapshot is abstraction of cluster state used for predicate simulations.
@@ -84,13 +83,12 @@ type ClusterSnapshotStore interface {
 	// ForceRemovePod removes the given Pod (and all DRA objects it owns) from the snapshot.
 	ForceRemovePod(namespace string, podName string, nodeName string) error
 
-	// AddSchedulerNodeInfo adds the given schedulerframework.NodeInfo to the snapshot without checking scheduler predicates, and
-	// without taking DRA objects into account. This shouldn't be used outside the clustersnapshot pkg, use ClusterSnapshot.AddNodeInfo()
-	// instead.
-	AddSchedulerNodeInfo(nodeInfo fwk.NodeInfo) error
-	// RemoveSchedulerNodeInfo removes the given schedulerframework.NodeInfo from the snapshot without taking DRA objects into account. This shouldn't
+	// ForceAddNodeInfo adds the given CA-internal NodeInfo to the snapshot without checking scheduler predicates.
+	// This shouldn't be used outside the clustersnapshot pkg, use ClusterSnapshot.AddNodeInfo() instead.
+	ForceAddNodeInfo(nodeInfo *framework.NodeInfo) error
+	// ForceRemoveNodeInfo removes the given NodeInfo from the snapshot without taking DRA objects into account. This shouldn't
 	// be used outside the clustersnapshot pkg, use ClusterSnapshot.RemoveNodeInfo() instead.
-	RemoveSchedulerNodeInfo(nodeName string) error
+	ForceRemoveNodeInfo(nodeName string) error
 
 	// DraSnapshot returns an interface that allows accessing and modifying the DRA objects in the snapshot.
 	DraSnapshot() *drasnapshot.Snapshot
