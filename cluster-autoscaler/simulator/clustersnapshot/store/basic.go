@@ -22,6 +22,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/clustersnapshot"
 	drasnapshot "k8s.io/autoscaler/cluster-autoscaler/simulator/dynamicresources/snapshot"
+	"k8s.io/autoscaler/cluster-autoscaler/simulator/framework"
 	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
@@ -35,7 +36,7 @@ type BasicSnapshotStore struct {
 }
 
 type internalBasicSnapshotData struct {
-	nodeInfoMap        map[string]fwk.NodeInfo
+	nodeInfoMap        map[string]*framework.NodeInfo
 	pvcNamespacePodMap map[string]map[string]bool
 }
 
@@ -123,15 +124,15 @@ func (data *internalBasicSnapshotData) removePvcUsedByPod(pod *apiv1.Pod) {
 
 func newInternalBasicSnapshotData() *internalBasicSnapshotData {
 	return &internalBasicSnapshotData{
-		nodeInfoMap:        make(map[string]fwk.NodeInfo),
+		nodeInfoMap:        make(map[string]*framework.NodeInfo),
 		pvcNamespacePodMap: make(map[string]map[string]bool),
 	}
 }
 
 func (data *internalBasicSnapshotData) clone() *internalBasicSnapshotData {
-	clonedNodeInfoMap := make(map[string]fwk.NodeInfo)
+	clonedNodeInfoMap := make(map[string]*framework.NodeInfo)
 	for k, v := range data.nodeInfoMap {
-		clonedNodeInfoMap[k] = v.Snapshot()
+		clonedNodeInfoMap[k] = v.DeepCopy()
 	}
 	clonedPvcNamespaceNodeMap := make(map[string]map[string]bool)
 	for k, v := range data.pvcNamespacePodMap {
@@ -150,8 +151,7 @@ func (data *internalBasicSnapshotData) addNode(node *apiv1.Node) error {
 	if _, found := data.nodeInfoMap[node.Name]; found {
 		return fmt.Errorf("node %s already in snapshot", node.Name)
 	}
-	nodeInfo := schedulerframework.NewNodeInfo()
-	nodeInfo.SetNode(node)
+	nodeInfo := framework.NewNodeInfo(node, nil)
 	data.nodeInfoMap[node.Name] = nodeInfo
 	return nil
 }
@@ -213,15 +213,15 @@ func (snapshot *BasicSnapshotStore) DraSnapshot() *drasnapshot.Snapshot {
 	return snapshot.draSnapshot
 }
 
-// AddSchedulerNodeInfo adds a NodeInfo.
-func (snapshot *BasicSnapshotStore) AddSchedulerNodeInfo(nodeInfo fwk.NodeInfo) error {
-	if err := snapshot.getInternalData().addNode(nodeInfo.Node()); err != nil {
-		return err
+// ForceAddNodeInfo adds a NodeInfo.
+func (snapshot *BasicSnapshotStore) ForceAddNodeInfo(nodeInfo *framework.NodeInfo) error {
+	data := snapshot.getInternalData()
+	if _, found := data.nodeInfoMap[nodeInfo.Node().Name]; found {
+		return fmt.Errorf("node %s already in snapshot", nodeInfo.Node().Name)
 	}
-	for _, podInfo := range nodeInfo.GetPods() {
-		if err := snapshot.getInternalData().addPod(podInfo.GetPod(), nodeInfo.Node().Name); err != nil {
-			return err
-		}
+	data.nodeInfoMap[nodeInfo.Node().Name] = nodeInfo.DeepCopy()
+	for _, podInfo := range nodeInfo.Pods() {
+		data.addPvcUsedByPod(podInfo.Pod)
 	}
 	return nil
 }
@@ -254,8 +254,8 @@ func (snapshot *BasicSnapshotStore) SetClusterState(nodes []*apiv1.Node, schedul
 	return nil
 }
 
-// RemoveSchedulerNodeInfo removes nodes (and pods scheduled to it) from the snapshot.
-func (snapshot *BasicSnapshotStore) RemoveSchedulerNodeInfo(nodeName string) error {
+// ForceRemoveNodeInfo removes nodes (and pods scheduled to it) from the snapshot.
+func (snapshot *BasicSnapshotStore) ForceRemoveNodeInfo(nodeName string) error {
 	return snapshot.getInternalData().removeNodeInfo(nodeName)
 }
 
