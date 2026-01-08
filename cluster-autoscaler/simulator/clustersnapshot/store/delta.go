@@ -70,7 +70,7 @@ type internalDeltaSnapshotData struct {
 	modifiedNodeInfoMap map[string]*framework.NodeInfo
 	deletedNodeInfos    map[string]bool
 
-	nodeInfoList                     []schedulerinterface.NodeInfo
+	nodeInfoList                     []*framework.NodeInfo
 	havePodsWithAffinity             []schedulerinterface.NodeInfo
 	havePodsWithRequiredAntiAffinity []schedulerinterface.NodeInfo
 	pvcNamespaceMap                  map[string]int
@@ -84,7 +84,7 @@ func newInternalDeltaSnapshotData() *internalDeltaSnapshotData {
 	}
 }
 
-func (data *internalDeltaSnapshotData) getNodeInfo(name string) (schedulerinterface.NodeInfo, bool) {
+func (data *internalDeltaSnapshotData) getNodeInfo(name string) (*framework.NodeInfo, bool) {
 	if data == nil {
 		return nil, false
 	}
@@ -97,7 +97,7 @@ func (data *internalDeltaSnapshotData) getNodeInfo(name string) (schedulerinterf
 	return data.baseData.getNodeInfo(name)
 }
 
-func (data *internalDeltaSnapshotData) getNodeInfoLocal(name string) (schedulerinterface.NodeInfo, bool) {
+func (data *internalDeltaSnapshotData) getNodeInfoLocal(name string) (*framework.NodeInfo, bool) {
 	if data == nil {
 		return nil, false
 	}
@@ -110,7 +110,7 @@ func (data *internalDeltaSnapshotData) getNodeInfoLocal(name string) (scheduleri
 	return nil, false
 }
 
-func (data *internalDeltaSnapshotData) getNodeInfoList() []schedulerinterface.NodeInfo {
+func (data *internalDeltaSnapshotData) getNodeInfoList() []*framework.NodeInfo {
 	if data == nil {
 		return nil
 	}
@@ -121,13 +121,13 @@ func (data *internalDeltaSnapshotData) getNodeInfoList() []schedulerinterface.No
 }
 
 // Contains costly copying throughout the struct chain. Use wisely.
-func (data *internalDeltaSnapshotData) buildNodeInfoList() []schedulerinterface.NodeInfo {
+func (data *internalDeltaSnapshotData) buildNodeInfoList() []*framework.NodeInfo {
 	baseList := data.baseData.getNodeInfoList()
 	totalLen := len(baseList) + len(data.addedNodeInfoMap)
-	var nodeInfoList []schedulerinterface.NodeInfo
+	var nodeInfoList []*framework.NodeInfo
 
 	if len(data.deletedNodeInfos) > 0 || len(data.modifiedNodeInfoMap) > 0 {
-		nodeInfoList = make([]schedulerinterface.NodeInfo, 0, totalLen)
+		nodeInfoList = make([]*framework.NodeInfo, 0, totalLen)
 		for _, bni := range baseList {
 			if data.deletedNodeInfos[bni.Node().Name] {
 				continue
@@ -139,7 +139,7 @@ func (data *internalDeltaSnapshotData) buildNodeInfoList() []schedulerinterface.
 			nodeInfoList = append(nodeInfoList, bni)
 		}
 	} else {
-		nodeInfoList = make([]schedulerinterface.NodeInfo, len(baseList), totalLen)
+		nodeInfoList = make([]*framework.NodeInfo, len(baseList), totalLen)
 		copy(nodeInfoList, baseList)
 	}
 
@@ -221,7 +221,7 @@ func (data *internalDeltaSnapshotData) removeNodeInfo(nodeName string) error {
 func (data *internalDeltaSnapshotData) nodeInfoToModify(nodeName string) (*framework.NodeInfo, bool) {
 	dni, found := data.getNodeInfoLocal(nodeName)
 	if found {
-		return dni.(*framework.NodeInfo), true
+		return dni, true
 	}
 	if _, found := data.deletedNodeInfos[nodeName]; found {
 		return nil, false
@@ -326,9 +326,24 @@ func (data *internalDeltaSnapshotData) commit() (*internalDeltaSnapshotData, err
 	return data.baseData, nil
 }
 
+// GetNodeInfo returns the internal NodeInfo of the given node name.
+func (snapshot *DeltaSnapshotStore) GetNodeInfo(nodeName string) (*framework.NodeInfo, error) {
+	return snapshot.getNodeInfo(nodeName)
+}
+
+// ListNodeInfos returns the list of internal NodeInfos in the snapshot.
+func (snapshot *DeltaSnapshotStore) ListNodeInfos() ([]*framework.NodeInfo, error) {
+	return snapshot.data.getNodeInfoList(), nil
+}
+
 // List returns list of all node infos.
 func (snapshot *deltaSnapshotStoreNodeLister) List() ([]schedulerinterface.NodeInfo, error) {
-	return snapshot.data.getNodeInfoList(), nil
+	nodeInfos := snapshot.data.getNodeInfoList()
+	result := make([]schedulerinterface.NodeInfo, len(nodeInfos))
+	for i, v := range nodeInfos {
+		result[i] = v
+	}
+	return result, nil
 }
 
 // HavePodsWithAffinityList returns list of all node infos with pods that have affinity constrints.
@@ -377,7 +392,7 @@ func (snapshot *deltaSnapshotStoreStorageLister) IsPVCUsedByPods(key string) boo
 	return (*DeltaSnapshotStore)(snapshot).IsPVCUsedByPods(key)
 }
 
-func (snapshot *DeltaSnapshotStore) getNodeInfo(nodeName string) (schedulerinterface.NodeInfo, error) {
+func (snapshot *DeltaSnapshotStore) getNodeInfo(nodeName string) (*framework.NodeInfo, error) {
 	data := snapshot.data
 	node, found := data.getNodeInfo(nodeName)
 	if !found {
