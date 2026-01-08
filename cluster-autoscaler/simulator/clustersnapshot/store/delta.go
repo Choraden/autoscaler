@@ -66,8 +66,8 @@ type deltaSnapshotStoreStorageLister DeltaSnapshotStore
 type internalDeltaSnapshotData struct {
 	baseData *internalDeltaSnapshotData
 
-	addedNodeInfoMap    map[string]schedulerinterface.NodeInfo
-	modifiedNodeInfoMap map[string]schedulerinterface.NodeInfo
+	addedNodeInfoMap    map[string]*framework.NodeInfo
+	modifiedNodeInfoMap map[string]*framework.NodeInfo
 	deletedNodeInfos    map[string]bool
 
 	nodeInfoList                     []schedulerinterface.NodeInfo
@@ -78,8 +78,8 @@ type internalDeltaSnapshotData struct {
 
 func newInternalDeltaSnapshotData() *internalDeltaSnapshotData {
 	return &internalDeltaSnapshotData{
-		addedNodeInfoMap:    make(map[string]schedulerinterface.NodeInfo),
-		modifiedNodeInfoMap: make(map[string]schedulerinterface.NodeInfo),
+		addedNodeInfoMap:    make(map[string]*framework.NodeInfo),
+		modifiedNodeInfoMap: make(map[string]*framework.NodeInfo),
 		deletedNodeInfos:    make(map[string]bool),
 	}
 }
@@ -151,8 +151,7 @@ func (data *internalDeltaSnapshotData) buildNodeInfoList() []schedulerinterface.
 }
 
 func (data *internalDeltaSnapshotData) addNode(node *apiv1.Node) (schedulerinterface.NodeInfo, error) {
-	nodeInfo := schedulerimpl.NewNodeInfo()
-	nodeInfo.SetNode(node)
+	nodeInfo := framework.NewNodeInfo(node, nil)
 	err := data.addNodeInfo(nodeInfo)
 	if err != nil {
 		return nil, err
@@ -160,7 +159,7 @@ func (data *internalDeltaSnapshotData) addNode(node *apiv1.Node) (schedulerinter
 	return nodeInfo, nil
 }
 
-func (data *internalDeltaSnapshotData) addNodeInfo(nodeInfo schedulerinterface.NodeInfo) error {
+func (data *internalDeltaSnapshotData) addNodeInfo(nodeInfo *framework.NodeInfo) error {
 	if _, found := data.getNodeInfo(nodeInfo.Node().Name); found {
 		return fmt.Errorf("node %s already in snapshot", nodeInfo.Node().Name)
 	}
@@ -228,21 +227,22 @@ func (data *internalDeltaSnapshotData) removeNodeInfo(nodeName string) error {
 	return nil
 }
 
-func (data *internalDeltaSnapshotData) nodeInfoToModify(nodeName string) (schedulerinterface.NodeInfo, bool) {
+func (data *internalDeltaSnapshotData) nodeInfoToModify(nodeName string) (*framework.NodeInfo, bool) {
 	dni, found := data.getNodeInfoLocal(nodeName)
-	if !found {
-		if _, found := data.deletedNodeInfos[nodeName]; found {
-			return nil, false
-		}
-		bni, found := data.baseData.getNodeInfo(nodeName)
-		if !found {
-			return nil, false
-		}
-		dni = bni.Snapshot()
-		data.modifiedNodeInfoMap[nodeName] = dni
-		data.clearCaches()
+	if found {
+		return dni.(*framework.NodeInfo), true
 	}
-	return dni, true
+	if _, found := data.deletedNodeInfos[nodeName]; found {
+		return nil, false
+	}
+	bni, found := data.baseData.getNodeInfo(nodeName)
+	if !found {
+		return nil, false
+	}
+	newDni := bni.Snapshot().(*framework.NodeInfo)
+	data.modifiedNodeInfoMap[nodeName] = newDni
+	data.clearCaches()
+	return newDni, true
 }
 
 func (data *internalDeltaSnapshotData) addPodInfo(podInfo schedulerinterface.PodInfo, nodeName string) error {
@@ -449,15 +449,10 @@ func (snapshot *DeltaSnapshotStore) CsiSnapshot() *csisnapshot.Snapshot {
 	return snapshot.csiSnapshot
 }
 
-// AddSchedulerNodeInfo adds a NodeInfo.
-func (snapshot *DeltaSnapshotStore) AddSchedulerNodeInfo(nodeInfo schedulerinterface.NodeInfo) error {
-	if _, err := snapshot.data.addNode(nodeInfo.Node()); err != nil {
+// StoreNodeInfo adds a NodeInfo.
+func (snapshot *DeltaSnapshotStore) StoreNodeInfo(nodeInfo *framework.NodeInfo) error {
+	if err := snapshot.data.addNodeInfo(nodeInfo); err != nil {
 		return err
-	}
-	for _, podInfo := range nodeInfo.GetPods() {
-		if err := snapshot.data.addPodInfo(podInfo, nodeInfo.Node().Name); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -536,8 +531,8 @@ func (snapshot *DeltaSnapshotStore) SetClusterState(nodes []*apiv1.Node, schedul
 	return nil
 }
 
-// RemoveSchedulerNodeInfo removes nodes (and pods scheduled to it) from the snapshot.
-func (snapshot *DeltaSnapshotStore) RemoveSchedulerNodeInfo(nodeName string) error {
+// RemoveNodeInfo removes nodes (and pods scheduled to it) from the snapshot.
+func (snapshot *DeltaSnapshotStore) RemoveNodeInfo(nodeName string) error {
 	return snapshot.data.removeNodeInfo(nodeName)
 }
 
