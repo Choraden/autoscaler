@@ -20,6 +20,8 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	ca_context "k8s.io/autoscaler/cluster-autoscaler/context"
 	coreoptions "k8s.io/autoscaler/cluster-autoscaler/core/options"
+	"k8s.io/autoscaler/cluster-autoscaler/processors/nodegroupset"
+	"k8s.io/autoscaler/cluster-autoscaler/processors/nodeinfosprovider"
 	"k8s.io/client-go/informers"
 
 	klog "k8s.io/klog/v2"
@@ -44,10 +46,34 @@ func NewCloudProvider(opts *coreoptions.AutoscalerOptions, informerFactory infor
 	}
 
 	provider := buildCloudProvider(opts, do, rl, informerFactory)
+
+	opts.Processors.NodeGroupSetProcessor = &nodegroupset.BalancingNodeGroupSetProcessor{
+		Comparator: buildNodeInfoComparator(opts),
+	}
+
 	if provider != nil {
 		return provider
 	}
 
 	klog.Fatalf("Unknown cloud provider: %s", opts.CloudProviderName)
 	return nil // This will never happen because the Fatalf will os.Exit
+}
+
+func buildNodeInfoComparator(opts *coreoptions.AutoscalerOptions) nodegroupset.NodeInfoComparator {
+	if len(opts.BalancingLabels) > 0 {
+		return nodegroupset.CreateLabelNodeInfoComparator(opts.BalancingLabels)
+	}
+	providerName := opts.CloudProviderName
+	switch providerName {
+	case cloudprovider.AzureProviderName:
+		return nodegroupset.CreateAzureNodeInfoComparator(opts.BalancingExtraIgnoredLabels, opts.NodeGroupSetRatios)
+	case cloudprovider.AwsProviderName:
+		opts.Processors.TemplateNodeInfoProvider = nodeinfosprovider.NewAsgTagResourceNodeInfoProvider(&opts.NodeInfoCacheExpireTime, opts.ForceDaemonSets)
+		return nodegroupset.CreateAwsNodeInfoComparator(opts.BalancingExtraIgnoredLabels, opts.NodeGroupSetRatios)
+	case cloudprovider.GceProviderName:
+		opts.Processors.TemplateNodeInfoProvider = nodeinfosprovider.NewAnnotationNodeInfoProvider(&opts.NodeInfoCacheExpireTime, opts.ForceDaemonSets)
+		return nodegroupset.CreateGceNodeInfoComparator(opts.BalancingExtraIgnoredLabels, opts.NodeGroupSetRatios)
+	default:
+		return nodegroupset.CreateGenericNodeInfoComparator(opts.BalancingExtraIgnoredLabels, opts.NodeGroupSetRatios)
+	}
 }
