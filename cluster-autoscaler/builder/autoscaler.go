@@ -149,7 +149,7 @@ func (b *AutoscalerBuilder) Build(ctx context.Context) (core.Autoscaler, *loop.L
 		return nil, nil, fmt.Errorf("informerFactory is missing: ensure WithInformerFactory() is called")
 	}
 
-	fwHandle, err := framework.NewHandle(b.informerFactory, autoscalingOptions.SchedulerConfig, autoscalingOptions.DynamicResourceAllocationEnabled, autoscalingOptions.CSINodeAwareSchedulingEnabled)
+	fwHandle, err := framework.NewHandle(ctx, b.informerFactory, autoscalingOptions.SchedulerConfig, autoscalingOptions.DynamicResourceAllocationEnabled, autoscalingOptions.CSINodeAwareSchedulingEnabled)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -284,7 +284,7 @@ func (b *AutoscalerBuilder) Build(ctx context.Context) (core.Autoscaler, *loop.L
 	metrics.InitMetrics()
 
 	// Initialize default options.
-	if err := b.initializeDefaultOptions(&opts); err != nil {
+	if err := b.initializeDefaultOptions(ctx, &opts); err != nil {
 		return nil, nil, err
 	}
 	// Create autoscaler.
@@ -315,7 +315,7 @@ func (b *AutoscalerBuilder) Build(ctx context.Context) (core.Autoscaler, *loop.L
 }
 
 // initializeDefaultOptions initialize default options if not provided.
-func (b *AutoscalerBuilder) initializeDefaultOptions(opts *coreoptions.AutoscalerOptions) error {
+func (b *AutoscalerBuilder) initializeDefaultOptions(ctx context.Context, opts *coreoptions.AutoscalerOptions) error {
 	if opts.Processors == nil {
 		opts.Processors = ca_processors.DefaultProcessors(opts.AutoscalingOptions)
 	}
@@ -323,10 +323,10 @@ func (b *AutoscalerBuilder) initializeDefaultOptions(opts *coreoptions.Autoscale
 		opts.LoopStartNotifier = loopstart.NewObserversList(nil)
 	}
 	if opts.AutoscalingKubeClients == nil {
-		opts.AutoscalingKubeClients = ca_context.NewAutoscalingKubeClients(opts.AutoscalingOptions, opts.KubeClient, opts.InformerFactory)
+		opts.AutoscalingKubeClients = ca_context.NewAutoscalingKubeClients(ctx, opts.AutoscalingOptions, opts.KubeClient, opts.InformerFactory)
 	}
 	if opts.FrameworkHandle == nil {
-		fwHandle, err := framework.NewHandle(opts.InformerFactory, opts.SchedulerConfig, opts.DynamicResourceAllocationEnabled, opts.CSINodeAwareSchedulingEnabled)
+		fwHandle, err := framework.NewHandle(ctx, opts.InformerFactory, opts.SchedulerConfig, opts.DynamicResourceAllocationEnabled, opts.CSINodeAwareSchedulingEnabled)
 		if err != nil {
 			return err
 		}
