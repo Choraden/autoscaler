@@ -28,6 +28,8 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
@@ -87,6 +89,8 @@ func NewFakeSet() *FakeSet {
 // MustCreateControllerRuntimeMgr creates a controller-runtime manager with metrics and health probes disabled.
 func MustCreateControllerRuntimeMgr(t testing.TB) manager.Manager {
 	t.Helper()
+
+	ctrl.SetLogger(klog.NewKlogr())
 
 	mgr, err := manager.New(&rest.Config{}, manager.Options{
 		Metrics: metricsserver.Options{
