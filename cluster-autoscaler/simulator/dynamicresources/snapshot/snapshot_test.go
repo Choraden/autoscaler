@@ -579,9 +579,9 @@ func TestSnapshotWrapSchedulerNodeInfo(t *testing.T) {
 			if diff := cmp.Diff(tc.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("Snapshot.WrapSchedulerNodeInfo(): unexpected error (-want +got): %s", diff)
 			}
-			cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmp.AllowUnexported(framework.NodeInfo{}, schedulerimpl.NodeInfo{}),
-				cmpopts.IgnoreUnexported(schedulerimpl.PodInfo{}),
-				test.IgnoreObjectOrder[*resourceapi.ResourceClaim](), test.IgnoreObjectOrder[*resourceapi.ResourceSlice]()}
+			cmpOpts := append(framework.NodeInfoCmpOptions(),
+				cmpopts.EquateEmpty(),
+				test.IgnoreObjectOrder[*resourceapi.ResourceClaim](), test.IgnoreObjectOrder[*resourceapi.ResourceSlice]())
 
 			if diff := cmp.Diff(tc.wantNodeInfo, nodeInfo, cmpOpts...); diff != "" {
 				t.Errorf("Snapshot.WrapSchedulerNodeInfo(): unexpected output (-want +got): %s", diff)
