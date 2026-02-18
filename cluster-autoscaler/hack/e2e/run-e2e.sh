@@ -57,7 +57,7 @@ kubectl rollout status daemonset/dra-example-driver-kubeletplugin -n kube-system
 echo "Redeploying Cluster Autoscaler..."
 # Reuse CA image.
 REGISTRY="gcr.io/$(gcloud config get core/project)"
-export IMAGE="${REGISTRY}/cluster-autoscaler:${TAG}"
+export CA_IMAGE="${REGISTRY}/cluster-autoscaler:${TAG}"
 ${CA_ROOT}/hack/e2e/deploy-ca-on-gce-for-e2e.sh
 
 echo "Running DRA tests..."
