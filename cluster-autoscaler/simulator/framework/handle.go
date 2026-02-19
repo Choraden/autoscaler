@@ -19,15 +19,16 @@ package framework
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"k8s.io/client-go/informers"
 	schedulerconfig "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	schedulerconfiglatest "k8s.io/kubernetes/pkg/scheduler/apis/config/latest"
-	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
+	schedulerimpl "k8s.io/kubernetes/pkg/scheduler/framework"
 	schedulerplugins "k8s.io/kubernetes/pkg/scheduler/framework/plugins"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodevolumelimits"
 	schedulerframeworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 	schedulermetrics "k8s.io/kubernetes/pkg/scheduler/metrics"
-	"sync"
 )
 
 var (
@@ -36,7 +37,7 @@ var (
 
 // Handle is meant for interacting with the scheduler framework.
 type Handle struct {
-	Framework        schedulerframework.Framework
+	Framework        schedulerimpl.Framework
 	DelegatingLister *DelegatingSchedulerSharedLister
 }
 
